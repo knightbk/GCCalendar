@@ -12,6 +12,10 @@
 @protocol GCCalendarDataSource <NSObject>
 @required
 - (NSArray *)calendarEventsForDate:(NSDate *)date;
+@optional
+- (NSInteger)workingDayStart;
+- (NSInteger)workingDayEnd;
+- (BOOL)showOnlyWorkingHours;
 @end
 
 @class GCCalendarEvent;

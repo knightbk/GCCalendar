@@ -114,11 +114,15 @@ static NSArray *timeStrings;
 
 @interface GCCalendarTodayView : UIView {
 	NSArray *events;
+	NSInteger workingDayStart;
+	NSInteger workingDayEnd;
+	BOOL showOnlyWorkingHours;
 }
 
 - (id)initWithEvents:(NSArray *)a;
+- (id)initWithEvents:(NSArray *)a dayStart:(NSInteger)dayStart dayEnd:(NSInteger)dayEnd showOnlyWorkingHours:(BOOL)only;
 - (BOOL)hasEvents;
-+ (CGFloat)yValueForTime:(CGFloat)time;
+- (CGFloat)yValueForTime:(CGFloat)time;
 
 @end
 
@@ -134,6 +138,19 @@ static NSArray *timeStrings;
 			[self addSubview:tile];
 			[tile release];
 		}
+		
+		workingDayStart = 8;
+		workingDayEnd = 20;
+	}
+	
+	return self;
+}
+- (id)initWithEvents:(NSArray *)a dayStart:(NSInteger)dayStart dayEnd:(NSInteger)dayEnd showOnlyWorkingHours:(BOOL)only
+{
+	if (self = [self initWithEvents:a]) {
+		workingDayStart = dayStart;
+		workingDayEnd = dayEnd;
+		showOnlyWorkingHours = only;
 	}
 	
 	return self;
@@ -165,11 +182,11 @@ static NSArray *timeStrings;
 		NSInteger endHour = [components hour];
 		NSInteger endMinute = [components minute];
 		
-		CGFloat startPos = kTopLineBuffer + startHour * 2 * kHalfHourDiff - 2;
+		CGFloat startPos = kTopLineBuffer + (startHour - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff - 2;
 		startPos += (startMinute / 60.0) * (kHalfHourDiff * 2.0);
 		startPos = floor(startPos);
 		
-		CGFloat endPos = kTopLineBuffer + endHour * 2 * kHalfHourDiff + 3;
+		CGFloat endPos = kTopLineBuffer + (endHour - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff + 3;
 		endPos += (endMinute / 60.0) * (kHalfHourDiff * 2.0);
 		endPos = floor(endPos);
 		
@@ -182,16 +199,20 @@ static NSArray *timeStrings;
 - (void)drawRect:(CGRect)rect {
     // grab current graphics context
 	CGContextRef g = UIGraphicsGetCurrentContext();
-	
-	CGContextSetRGBFillColor(g, (242.0 / 255.0), (242.0 / 255.0), (242.0 / 255.0), 1.0);
-	
-	// fill morning hours light grey
-	CGFloat morningHourMax = [GCCalendarTodayView yValueForTime:(CGFloat)8];
+
+	// When showing only working hours, fill in white instead of grey
+	if (showOnlyWorkingHours)
+		CGContextSetRGBFillColor(g, 1.0, 1.0, 1.0, 1.0);
+	else
+		CGContextSetRGBFillColor(g, (242.0 / 255.0), (242.0 / 255.0), (242.0 / 255.0), 1.0);
+
+	// fill morning hours
+	CGFloat morningHourMax = [self yValueForTime:(CGFloat)workingDayStart];
 	CGRect morningHours = CGRectMake(0, 0, self.frame.size.width, morningHourMax - 1);	
 	CGContextFillRect(g, morningHours);
 
-	// fill evening hours light grey
-	CGFloat eveningHourMax = [GCCalendarTodayView yValueForTime:(CGFloat)20];
+	// fill evening hours
+	CGFloat eveningHourMax = [self yValueForTime:(CGFloat)workingDayEnd];
 	CGRect eveningHours = CGRectMake(0, eveningHourMax - 1, self.frame.size.width, self.frame.size.height - eveningHourMax + 1);
 	CGContextFillRect(g, eveningHours);
 	
@@ -205,8 +226,8 @@ static NSArray *timeStrings;
 	const CGFloat solidPattern[2] = {1.0, 0.0};
 	CGContextSetRGBStrokeColor(g, 0.0, 0.0, 0.0, .3);
 	CGContextSetLineDash(g, 0, solidPattern, 2);
-	for (NSInteger i = 0; i < 25; i++) {
-		CGFloat yVal = [GCCalendarTodayView yValueForTime:(CGFloat)i];
+	for (NSInteger i = showOnlyWorkingHours ? workingDayStart : 0; i <= (showOnlyWorkingHours ? workingDayEnd : 24); i++) {
+		CGFloat yVal = [self yValueForTime:(CGFloat)i];
 		CGContextMoveToPoint(g, kSideLineBuffer, yVal);
 		CGContextAddLineToPoint(g, self.frame.size.width, yVal);
 	}
@@ -217,9 +238,9 @@ static NSArray *timeStrings;
 	const CGFloat dashPattern[2] = {1.0, 1.0};
 	CGContextSetRGBStrokeColor(g, 0.0, 0.0, 0.0, .2);
 	CGContextSetLineDash(g, 0, dashPattern, 2);
-	for (NSInteger i = 0; i < 24; i++) {
+	for (NSInteger i = showOnlyWorkingHours ? workingDayStart : 0; i <= (showOnlyWorkingHours ? workingDayEnd - 1: 23); i++) {
 		CGFloat time = (CGFloat)i + 0.5f;
-		CGFloat yVal = [GCCalendarTodayView yValueForTime:time];
+		CGFloat yVal = [self yValueForTime:time];
 		CGContextMoveToPoint(g, kSideLineBuffer, yVal);
 		CGContextAddLineToPoint(g, self.frame.size.width, yVal);
 	}
@@ -229,8 +250,8 @@ static NSArray *timeStrings;
 	CGContextSetShouldAntialias(g, YES);
 	[[UIColor blackColor] set];
 	UIFont *numberFont = [UIFont boldSystemFontOfSize:14.0];
-	for (NSInteger i = 0; i < 25; i++) {
-		CGFloat yVal = [GCCalendarTodayView yValueForTime:(CGFloat)i];
+	for (NSInteger i = showOnlyWorkingHours ? workingDayStart : 0; i <= (showOnlyWorkingHours ? workingDayEnd : 24); i++) {
+		CGFloat yVal = [self yValueForTime:(CGFloat)i];
 		NSString *number = [timeStrings objectAtIndex:i];
 		CGSize numberSize = [number sizeWithFont:numberFont];
 		if(i == 12) {
@@ -256,7 +277,7 @@ static NSArray *timeStrings;
 	CGContextSetShouldAntialias(g, YES);
 	[[UIColor grayColor] set];
 	UIFont *textFont = [UIFont systemFontOfSize:12.0];
-	for (NSInteger i = 0; i < 25; i++) {
+	for (NSInteger i = showOnlyWorkingHours ? workingDayStart : 0; i <= (showOnlyWorkingHours ? workingDayEnd : 24); i++) {
 		NSString *text = nil;
 		if (i < 12) {
 			text = @"AM";
@@ -265,7 +286,7 @@ static NSArray *timeStrings;
 			text = @"PM";
 		}
 		if (i != 12) {
-			CGFloat yVal = [GCCalendarTodayView yValueForTime:(CGFloat)i];
+			CGFloat yVal = [self yValueForTime:(CGFloat)i];
 			CGSize textSize = [text sizeWithFont:textFont];
 			[text drawInRect:CGRectMake(kSideLineBuffer - 7 - textSize.width,
 										yVal - (textSize.height / 2),
@@ -275,8 +296,8 @@ static NSArray *timeStrings;
 		}
 	}
 }
-+ (CGFloat)yValueForTime:(CGFloat)time {
-	return kTopLineBuffer + (44.0f * time);;
+- (CGFloat)yValueForTime:(CGFloat)time {
+	return kTopLineBuffer + (44.0f * (time - (showOnlyWorkingHours ? workingDayStart : 0)));;
 }
 @end
 
@@ -310,6 +331,16 @@ static NSArray *timeStrings;
 	// get new events for date
 	events = [dataSource calendarEventsForDate:date];
 	
+	NSInteger startH = 8, endH = 20;
+	BOOL onlyW = NO;
+	
+	if ([dataSource respondsToSelector:@selector(workingDayStart)])
+		startH = [dataSource workingDayStart];
+	if ([dataSource respondsToSelector:@selector(workingDayEnd)])
+		endH = [dataSource workingDayEnd];
+	if ([dataSource respondsToSelector:@selector(showOnlyWorkingHours)])
+		onlyW = [dataSource showOnlyWorkingHours];
+	
 	// drop all subviews
 	[self.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
 	[allDayView release];
@@ -328,12 +359,13 @@ static NSArray *timeStrings;
 	scrollView.backgroundColor = [UIColor colorWithRed:(242.0 / 255.0) green:(242.0 / 255.0) blue:(242.0 / 255.0) alpha:1.0];
 	scrollView.frame = CGRectMake(0, allDayView.frame.size.height, self.frame.size.width,
 								  self.frame.size.height - allDayView.frame.size.height);
-	scrollView.contentSize = CGSizeMake(self.frame.size.width, 1078);
+	scrollView.contentSize = CGSizeMake(self.frame.size.width, 44.0 * (onlyW ? (0.5 + endH - startH) : 24));
 	scrollView.autoresizingMask = (UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight);
 	[self addSubview:scrollView];
 	
 	// create today view
-	todayView = [[GCCalendarTodayView alloc] initWithEvents:events];
+
+	todayView = [[GCCalendarTodayView alloc] initWithEvents:events dayStart:startH dayEnd:endH showOnlyWorkingHours:onlyW];
 	todayView.frame = CGRectMake(0, 0, self.frame.size.width, 1078);
 	todayView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 	[scrollView addSubview:todayView];
