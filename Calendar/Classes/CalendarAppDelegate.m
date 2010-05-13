@@ -94,7 +94,7 @@
 	
 	return events;
 }
-/*
+
 - (NSInteger)workingDayStart
 {
 	return 10;
@@ -109,7 +109,7 @@
 {
 	return YES;
 }
-*/
+
 #pragma mark GCCalendarDelegate
 - (void)calendarTileTouchedInView:(GCCalendarView *)view withEvent:(GCCalendarEvent *)event {
 	NSLog(@"%s", __PRETTY_FUNCTION__);
