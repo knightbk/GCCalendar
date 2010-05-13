@@ -21,6 +21,8 @@
 #define kSideLineBuffer 50.0
 #define kHalfHourDiff 22.0
 
+#define kTileMargin 2.0
+
 static NSArray *timeStrings;
 
 @interface GCCalendarAllDayView : UIView {
@@ -165,36 +167,73 @@ static NSArray *timeStrings;
 	[super dealloc];
 }
 - (void)layoutSubviews {
-	for (UIView *view in self.subviews) {
-		// get calendar tile and associated event
-		GCCalendarTile *tile = (GCCalendarTile *)view;
-		
-		NSDateComponents *components;
+	NSMutableSet *done = [[NSMutableSet alloc] initWithCapacity:[self.subviews count]];
+	NSDateComponents *components;
+
+	for (GCCalendarTile *tile in self.subviews)
+	{
+		NSInteger nCollisions = 0;
+		NSInteger nX = 0;
+
 		components = [[NSCalendar currentCalendar] components:(NSHourCalendarUnit | 
 															   NSMinuteCalendarUnit) 
 													 fromDate:tile.event.startDate];
-		NSInteger startHour = [components hour];
-		NSInteger startMinute = [components minute];
-		
+
+		NSInteger tileStart = 60 * [components hour] + [components minute];
+
 		components = [[NSCalendar currentCalendar] components:(NSHourCalendarUnit | 
 															   NSMinuteCalendarUnit) 
 													 fromDate:tile.event.endDate];
-		NSInteger endHour = [components hour];
-		NSInteger endMinute = [components minute];
+
+		NSInteger tileEnd = 60 * [components hour] + [components minute];
+
+		for (NSInteger minute = tileStart + 1; minute < tileEnd; ++minute)
+		{
+			NSInteger nLocalColl = 0;
+			NSInteger nLocalX = 0;
+
+			for (GCCalendarTile *otherTile in self.subviews)
+			{
+				components = [[NSCalendar currentCalendar] components:(NSHourCalendarUnit | 
+																	   NSMinuteCalendarUnit) 
+															 fromDate:otherTile.event.startDate];
+				NSInteger otherStart = 60 * [components hour] + [components minute];
+
+				components = [[NSCalendar currentCalendar] components:(NSHourCalendarUnit | 
+																	   NSMinuteCalendarUnit) 
+															 fromDate:otherTile.event.endDate];
+				NSInteger otherEnd = 60 *[components hour] + [components minute];
+
+				if ((minute >= otherStart) && (minute <= otherEnd))
+				{
+					nLocalColl++;
+					if ([done containsObject:otherTile])
+						nLocalX++;
+				}
+			}
+
+			nCollisions = (nLocalColl > nCollisions) ? nLocalColl : nCollisions;
+			nX = (nLocalX > nX) ? nLocalX : nX;
+		}
+
+		[done addObject:tile];
 		
-		CGFloat startPos = kTopLineBuffer + (startHour - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff - 2;
-		startPos += (startMinute / 60.0) * (kHalfHourDiff * 2.0);
+		CGFloat startPos = kTopLineBuffer + (tileStart / 60 - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff - 2;
+		startPos += ((tileStart % 60) / 60.0) * (kHalfHourDiff * 2.0);
 		startPos = floor(startPos);
 		
-		CGFloat endPos = kTopLineBuffer + (endHour - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff + 3;
-		endPos += (endMinute / 60.0) * (kHalfHourDiff * 2.0);
+		CGFloat endPos = kTopLineBuffer + (tileEnd / 60 - (showOnlyWorkingHours ? workingDayStart : 0)) * 2 * kHalfHourDiff + 3;
+		endPos += ((tileEnd % 60) / 60.0) * (kHalfHourDiff * 2.0);
 		endPos = floor(endPos);
-		
-		tile.frame = CGRectMake(kTileLeftSide, 
-								startPos, 
-								self.bounds.size.width - kTileLeftSide - kTileRightSide,
-								endPos - startPos);
+
+		CGFloat tileWidth = (self.bounds.size.width - kTileLeftSide -
+							 kTileRightSide - kTileMargin * (nCollisions - 1)) / nCollisions;
+
+		tile.frame = CGRectMake(kTileLeftSide + kTileMargin * (nCollisions - 1) + nX * tileWidth,
+								startPos, tileWidth, endPos - startPos);
 	}
+	
+	[done release];
 }
 - (void)drawRect:(CGRect)rect {
     // grab current graphics context
